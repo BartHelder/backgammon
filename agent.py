@@ -1,5 +1,5 @@
 import random
-import game
+from game import Game
 import numpy as np
 import tensorflow as tf
 #from tensorflow.keras import layers
@@ -16,8 +16,8 @@ except ImportError:
 
 import copy
 
-OFF = game.Game.OFF
-ON = game.Game.ON
+OFF = Game.OFF
+ON = Game.ON
 
 
 
@@ -27,7 +27,7 @@ class Agent:
     def __init__(self, token):
         self.token = token
     
-    def getAction(self,moves,game=None):
+    def get_action(self,moves,game=None):
         raise NotImplementedError("Override me")
 
 class RandomAgent(Agent):
@@ -124,34 +124,44 @@ class HumanAgent(Agent):
         except:
             return False
 
-# class RLAgent(Agent):
-#
-#     def __init__(self, token, weights=None):
-#         super().__init__(token)
-#         self.weights = weights
-#
-#     def load_weights(self, path='weights.npy'):
-#         pass
-#
-#     def evaluate_state(self, state):
-#
-#
-#     def get_action(self, actions, game):
-#
-#         """
-#         Return best action according to self.evaluationFunction,
-#         with no lookahead.
-#         """
-#         bestV = 0
-#
-#         for a in actions:
-#             ateList = game.take_action(a, self.token)
-#             features = game.extract_features((game,game.opponent(self.token)))
-#             hiddenAct = 1/(1+np.exp(-(self.w1.dot(features)+self.b1)))
-#             v = 1/(1+np.exp(-(self.w2.dot(hiddenAct)+self.b2)))
-#             if v>bestV:
-#                 action = a
-#                 bestV = v
-#             game.undo_action(a, self.token, ateList)
-#
-#         return action
+class RLAgent(Agent):
+
+    def __init__(self, token, weights=None):
+        super().__init__(token)
+        self.w1, self.w2, self.b1, self.b2 = weights
+
+    def load_weights(self, path='weights.npz'):
+        self.w1, self.w2, self.b1, self.b2 = np.load(path)
+
+    def evaluate_state(self, features):
+        hiddenAct = 1 / (1 + np.exp(-(self.w1.dot(features) + self.b1)))
+        v = 1 / (1 + np.exp(-(self.w2.dot(hiddenAct) + self.b2)))
+        return v
+
+    def get_action(self, actions, game):
+
+        """
+        Return optimal action according to feed forward neural network with weights w1, w2, b1, b2
+        If player is white, returns action with highest probability for white to win (max V)
+        If player is black, returns action with lowest probability for white to win (min V)
+
+        """
+
+        bestV = 0
+        worstV = 1
+
+        for a in actions:
+            ateList = game.take_action(a, self.token)
+            features = game.extract_features((game,game.opponent(self.token)))
+            v = self.evaluate_state(features)
+            if self.token == Game.TOKENS[0]:
+                if v>bestV:
+                    action = a
+                    bestV = v
+            elif self.token == Game.TOKENS[1]:
+                if v<worstV:
+                    action = a
+                    worstV = v
+            game.undo_action(a, self.token, ateList)
+
+        return action

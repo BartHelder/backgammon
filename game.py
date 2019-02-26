@@ -1,6 +1,5 @@
 import os, sys
 import copy
-import agent
 import numpy as np
 import random
 import time
@@ -13,12 +12,12 @@ except:
 class Game:
 
     """
-
+    Object representing a single game. Contains functions to play moves, draw graphics and return winning player.
     """
     TOKENS = ['o', 'x']  # White, black
     LAYOUT = "0-2-o,5-5-x,7-3-x,11-5-o,12-5-x,16-3-o,18-5-o,23-2-x"
     NUMCOLS = 24
-    QUAD = 6             # number of faces on the dice
+    QUAD = 6  # number of faces on the dice
     OFF = 'off'
     ON = 'on'
 
@@ -51,7 +50,6 @@ class Game:
         self.playernum = 0
 
 
-
     @staticmethod
     def new_game():
         g = Game()
@@ -70,35 +68,45 @@ class Game:
                 self.numPieces[piece] += 1
 
     def step(self, players):
+
         """
-        Takes a single step in the environment
+        Takes a single step in the environment: roll dice, draw graphics, decide on and take action, obtain reward
          """
 
-        # 1: roll dice
         roll = self.roll_dice()
-
-        # 2: draw dice roll on gui (optional)
         if self.graphics:
             self.draw(roll)
             print("Player %s rolled <%d,%d>." % (players[self.playernum].token, roll[0], roll[1]))
 
-        # 3: player makes his move
         if self.playernum:  # If black is on turn, flip the board around so black has the right (forward) perspective
-            g.reverse()
-        moves = self.getActions(roll, self.players[0], nodups=True) # Find all legal moves for this roll
-        move = players[self.playernum].getAction(moves, g) if moves else None
+            self.reverse()
+        moves = self.get_actions(roll, self.players[0], nodups=True) # Find all legal moves for this roll
+        move = players[self.playernum].get_action(moves, self) if moves else None
         if move:
             self.take_action(move, self.players[0])
         if self.playernum:  # If black just took his turn, flip the board back to normal 
-            g.reverse()
+            self.reverse()
 
-        done = g.is_done()
+        done = self.is_done()
         reward = int(self.is_won(players[0].token))  # Reward is 1 only if player 1 (white) has just won
 
         # Next player:
         self.playernum = (self.playernum + 1) % 2
 
         return reward, done
+
+    def play(self, players):
+
+        """
+        Plays out a full game from start to the end. Returns winning player
+        :param players: list of two players (based on agent.Agent)
+        :return: player number of winning player
+        """
+        done = False
+        while not done:
+            self.step(players)
+        return self.winner()
+
 
     def roll_dice(self):
         return (random.randint(1, self.die), random.randint(1, self.die))
@@ -142,7 +150,7 @@ class Game:
             else:
                 self.grid[s].append(piece)
 
-    def getActions(self,roll,player,nodups=False):
+    def get_actions(self,roll,player,nodups=False):
         """
         Get set of all possible move tuples.
         """
@@ -170,6 +178,15 @@ class Game:
         return moves
 
     def find_moves(self, rs, player, move, moves, start=None):
+        """
+        Helper function for finding moves
+        :param rs:
+        :param player:
+        :param move:
+        :param moves:
+        :param start:
+        :return:
+        """
         if len(rs)==0:
             moves.add(move)
             return
@@ -333,8 +350,10 @@ class Game:
                         feats = feature_map[lc] if lc < 4 else [0., 0., 1., (lc - 3) / 2]
                     else:
                         raise NotImplementedError('Unknown method specified, exiting')
-                    features += feats
 
+                elif lc == 0 or col[0] != p:
+                    feats = [0., 0., 0., 0.]
+                features += feats
             features.append(len(self.barPieces[p]) / 2)
             features.append(len(self.offPieces[p]) / self.numPieces[p])
 
@@ -455,13 +474,12 @@ class Game:
             return Game.OFF
         
         return None
-
-if __name__=='__main__':
-    g = Game(graphics=True)
-    g.reset()
-    players = [agent.RandomAgent(token=Game.TOKENS[0]), agent.RandomAgent(token=Game.TOKENS[1])]
-
-    done = False
-    while not done:
-        reward, done = g.step(players)
-        time.sleep(0.1)
+#
+# if __name__=='__main__':
+#     # g = Game(graphics=True)
+#     # g.reset()
+#     # players = [RandomAgent(token=Game.TOKENS[0]), RandomAgent(token=Game.TOKENS[1])]
+#     #
+#     # done = False
+#     # while not done:
+#     #     reward, done = g.step(players)
