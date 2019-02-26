@@ -1,35 +1,44 @@
 import os, sys
 import copy
+import agent
+import numpy as np
+import random
+import time
+
 try:
     import pygame
 except:
-    print "No module pygame, use screen drawing"
-
-LAYOUT = "0-2-o,5-5-x,7-3-x,11-5-o,12-5-x,16-3-o,18-5-o,23-2-x"
-
-NUMCOLS = 24
-QUAD = 6
-OFF = 'off'
-ON = 'on'
+    print("No module pygame, use screen drawing")
 
 class Game:
 
-    def __init__(self,layout=None,grid=None,offPieces=None,
-                 barPieces=None,numPieces=None,gPlayers=None):
+    """
+
+    """
+    TOKENS = ['o', 'x']  # White, black
+    LAYOUT = "0-2-o,5-5-x,7-3-x,11-5-o,12-5-x,16-3-o,18-5-o,23-2-x"
+    NUMCOLS = 24
+    QUAD = 6             # number of faces on the dice
+    OFF = 'off'
+    ON = 'on'
+
+
+    def __init__(self, layout=LAYOUT, grid=None, graphics=False, offPieces=None, barPieces=None, numPieces=None, players=None):
         """
         Define a new game object
         """
-        self.die = QUAD
+        self.die = Game.QUAD
         self.layout = layout
         if grid:
             self.grid = copy.deepcopy(grid)
             self.offPieces = copy.deepcopy(offPieces)
             self.barPieces = copy.deepcopy(barPieces)
             self.numPieces = copy.deepcopy(numPieces)
-            self.players = gPlayers
+            self.players = players
             return
         self.players = Game.TOKENS
-        self.grid = [[] for _ in range(NUMCOLS)]
+        self.grid = [[] for _ in range(Game.NUMCOLS)]
+        self.graphics = graphics
         self.offPieces = {}
         self.barPieces = {}
         self.numPieces = {}
@@ -39,28 +48,73 @@ class Game:
             self.numPieces[t] = 0
         self.init = True
         self.roll = None
-    TOKENS = ['o','x']
-            
-    def clone(self):
+        self.playernum = 0
+
+
+
+    @staticmethod
+    def new_game():
+        g = Game()
+        g.reset()
+        return g
+
+    def reset(self):
         """
-        Return an exact copy of the game. Changes can be made
-        to the cloned version without affecting the original.
+        Resets game to original layout.
         """
-        return Game(None,self.grid,self.offPieces,
-                    self.barPieces,self.numPieces,self.players)
-    
-    def takeAction(self,action,token):
+        for col in self.layout.split(','):
+            loc,num,token = col.split('-')
+            self.grid[int(loc)] = [token for _ in range(int(num))]
+        for col in self.grid:
+            for piece in col:
+                self.numPieces[piece] += 1
+
+    def step(self, players):
+        """
+        Takes a single step in the environment
+         """
+
+        # 1: roll dice
+        roll = self.roll_dice()
+
+        # 2: draw dice roll on gui (optional)
+        if self.graphics:
+            self.draw(roll)
+            print("Player %s rolled <%d,%d>." % (players[self.playernum].token, roll[0], roll[1]))
+
+        # 3: player makes his move
+        if self.playernum:  # If black is on turn, flip the board around so black has the right (forward) perspective
+            g.reverse()
+        moves = self.getActions(roll, self.players[0], nodups=True) # Find all legal moves for this roll
+        move = players[self.playernum].getAction(moves, g) if moves else None
+        if move:
+            self.take_action(move, self.players[0])
+        if self.playernum:  # If black just took his turn, flip the board back to normal 
+            g.reverse()
+
+        done = g.is_done()
+        reward = int(self.is_won(players[0].token))  # Reward is 1 only if player 1 (white) has just won
+
+        # Next player:
+        self.playernum = (self.playernum + 1) % 2
+
+        return reward, done
+
+    def roll_dice(self):
+        return (random.randint(1, self.die), random.randint(1, self.die))
+
+    def take_action(self, action, token):
         """
         Makes given move for player, assumes move is valid, 
         will remove pieces from play
         """
         ateList = [0]*4
-        for i,(s,e) in enumerate(action):
-            if s==ON:
+        for i,(s, e) in enumerate(action):
+            if s==self.ON:
                 piece = self.barPieces[token].pop()
             else:
                 piece = self.grid[s].pop()
-            if e==OFF:
+            if e==self.OFF:
                 self.offPieces[token].append(piece)
                 continue
             if len(self.grid[e])>0 and self.grid[e][0] != token:
@@ -70,28 +124,27 @@ class Game:
             self.grid[e].append(piece)
         return ateList
 
-    def undoAction(self,action,player,ateList):
+    def undo_action(self, action, player, ateList):
         """
         Reverses given move for player, assumes move is valid, 
         will remove pieces from play
         """
-        for i,(s,e) in enumerate(reversed(action)):
-            if e==OFF:
+        for i, (s, e) in enumerate(reversed(action)):
+            if e==self.OFF:
                 piece = self.offPieces[player].pop()
             else:
                 piece = self.grid[e].pop()
                 if ateList[len(action)-1-i]:
                     bar_piece = self.barPieces[self.opponent(player)].pop()
                     self.grid[e].append(bar_piece)
-            if s==ON:
+            if s==self.ON:
                 self.barPieces[player].append(piece)
             else:
                 self.grid[s].append(piece)
 
-
     def getActions(self,roll,player,nodups=False):
         """
-        Get set of all possible move tuples
+        Get set of all possible move tuples.
         """
         moves = set()
         if nodups:
@@ -104,23 +157,23 @@ class Game:
             i = 4
             # keep trying until we find some moves
             while not moves and i>0:
-                self.findMoves(tuple([r1]*i),player,(),moves,start)
+                self.find_moves(tuple([r1] * i), player, (), moves, start)
                 i -= 1
         else:
-            self.findMoves(roll,player,(),moves,start)
-            self.findMoves((r2,r1),player,(),moves,start)
+            self.find_moves(roll, player, (), moves, start)
+            self.find_moves((r2, r1), player, (), moves, start)
             # has no moves, try moving only one piece
             if not moves:
                 for r in roll:
-                    self.findMoves((r,),player,(),moves,start)
+                    self.find_moves((r,), player, (), moves, start)
 
         return moves
 
-    def findMoves(self,rs,player,move,moves,start=None):
+    def find_moves(self, rs, player, move, moves, start=None):
         if len(rs)==0:
             moves.add(move)
             return
-        r,rs = rs[0],rs[1:]
+        r, rs = rs[0], rs[1:]
         # see if we can remove a piece from the bar
         if self.barPieces[player]:
             if self.can_onboard(player,r):
@@ -131,7 +184,7 @@ class Game:
 
                 self.grid[r-1].append(piece)
 
-                self.findMoves(rs,player,move+((ON,r-1),),moves,start)
+                self.find_moves(rs, player, move + ((self.ON, r - 1),), moves, start)
                 self.grid[r-1].pop()
                 self.barPieces[player].append(piece)
                 if bar_piece:
@@ -152,7 +205,7 @@ class Game:
                 if len(self.grid[i+r])==1 and self.grid[i+r][-1]!=player:
                     bar_piece = self.grid[i+r].pop()
                 self.grid[i+r].append(piece)
-                self.findMoves(rs,player,move+((i,i+r),),moves,start)
+                self.find_moves(rs, player, move + ((i, i + r),), moves, start)
                 self.grid[i+r].pop()
                 self.grid[i].append(piece)
                 if bar_piece:
@@ -162,29 +215,28 @@ class Game:
             if offboarding and self.remove_piece(player,i,r):
                 piece = self.grid[i].pop()
                 self.offPieces[player].append(piece)
-                self.findMoves(rs,player,move+((i,OFF),),moves,start)
+                self.find_moves(rs, player, move + ((i, self.OFF),), moves, start)
                 self.offPieces[player].pop()
                 self.grid[i].append(piece)
 
-    def opponent(self,token):
+    def opponent(self, token):
         """
         Retrieve opponent players token for a given players token.
         """
         for t in self.players:
             if t!= token: return t
 
-    def isWon(self,player):
+    def is_won(self, player):
         """
         If game is over and player won, return True, else return False
         """
-        return self.is_over() and player==self.players[self.winner()]
+        return self.is_done() and player == self.players[self.winner()]
 
-    def isLost(self,player):
+    def is_lost(self, player):
         """
         If game is over and player lost, return True, else return False
         """
-        return self.is_over() and player!=self.players[self.winner()]
-
+        return self.is_done() and player != self.players[self.winner()]
 
     def reverse(self):
         """
@@ -194,26 +246,15 @@ class Game:
         self.grid.reverse()
         self.players.reverse()
 
-    def new_game(self):
-        """
-        Resets game to original layout.
-        """
-        for col in self.layout.split(','):
-            loc,num,token = col.split('-')
-            self.grid[int(loc)] = [token for _ in range(int(num))]
-        for col in self.grid:
-            for piece in col:
-                self.numPieces[piece] += 1
-
     def winner(self):
         """
-        Get winner.
+        Get player number of winning player
         """
-        return len(self.offPieces[self.players[0]])==self.numPieces[self.players[0]]
+        return int(not len(self.offPieces[self.players[0]])==self.numPieces[self.players[0]])
 
-    def is_over(self):
+    def is_done(self):
         """
-        Checks if the game is over.
+        Checks if the game is done.
         """
         for t in self.players:
             if len(self.offPieces[t])==self.numPieces[t]:
@@ -222,7 +263,7 @@ class Game:
 
     def can_offboard(self,player):
         count = 0
-        for i in range(NUMCOLS-self.die,NUMCOLS):
+        for i in range(self.NUMCOLS-self.die,self.NUMCOLS):
             if len(self.grid[i])>0 and self.grid[i][0]==player:
                 count += len(self.grid[i])
         if count+len(self.offPieces[player]) == self.numPieces[player]:
@@ -245,14 +286,14 @@ class Game:
         In this function we assume we are cool to offboard,
         i.e. no pieces on the bar and all are in the home quadrant.
         """
-        if start < NUMCOLS - self.die:
+        if start <self.NUMCOLS - self.die:
             return False
         if len(self.grid[start]) == 0 or self.grid[start][0] != player:
             return False
-        if start+r == NUMCOLS:
+        if start+r == self.NUMCOLS:
             return True
-        if start+r > NUMCOLS:
-            for i in range(start-1,NUMCOLS-self.die-1,-1):
+        if start+r > self.NUMCOLS:
+            for i in range(start-1, self.NUMCOLS-self.die-1,-1):
                 if len(self.grid[i]) != 0 and self.grid[i][0]==self.players[0]:
                     return False
             return True
@@ -268,42 +309,45 @@ class Game:
                 return True
         return False
 
+    def extract_features(self, player, method='original'):
+        """
+        Transform board state grid into binary feature representation necessary for the ANN.
+        :param player: marker of the player that's on turn
+        :method: encoding to be used. options:
+                    -original (as presented in Tesauro (1995)),
+                    -modified (less inputs activated, should train faster?)
+        :return: numpy array of 198 binary features
+        """
 
-    def draw_col(self,i,col):
-        print "|",
-        if i==-2:
-            if col<10:
-                print "",
-            print str(col),
-        elif i==-1:
-            print "--",
-        elif len(self.grid[col])>i:
-            print " "+self.grid[col][i],
+        features = []
+
+        for p in self.players:
+            for col in self.grid:
+                lc = len(col)
+                if lc > 0 and col[0] == p:
+                    if method == 'original':
+                        feature_map = [[0., 0., 0., 0.], [1., 0., 0., 0.], [1., 1., 0., 0.], [1., 1., 1., 0.]]
+                        feats = feature_map[lc] if lc < 4 else [1., 1., 1., (lc - 3) / 2]
+                    elif method == 'modified':
+                        feature_map = [[0., 0., 0., 0.], [1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.]]
+                        feats = feature_map[lc] if lc < 4 else [0., 0., 1., (lc - 3) / 2]
+                    else:
+                        raise NotImplementedError('Unknown method specified, exiting')
+                    features += feats
+
+            features.append(len(self.barPieces[p]) / 2)
+            features.append(len(self.offPieces[p]) / self.numPieces[p])
+
+        if player == self.players[0]:
+            features += [1., 0.]
         else:
-            print "  ",
+            features += [0., 1.]
 
-    def drawScreen(self):
-        os.system('clear')
-        largest = max([len(self.grid[i]) for i in range(len(self.grid)/2,len(self.grid))])
-        for i in range(-2,largest):
-            for col in range(len(self.grid)/2,len(self.grid)):
-                self.draw_col(i,col)
-            print "|"
-        print
-        print
-        largest = max([len(self.grid[i]) for i in range(len(self.grid)/2)])
-        for i in range(largest-1,-3,-1):
-            for col in range(len(self.grid)/2-1,-1,-1):
-                self.draw_col(i,col)
-            print "|"
-        for t in self.players:
-            print "<Player %s>  Off Board : "%(t),
-            for piece in self.offPieces[t]:
-                print t+'',
-            print "   Bar : ",
-            for piece in self.barPieces[t]:
-                print t+'',
-            print
+        return np.array(features).reshape(-1, 1)
+
+    ####################################
+    ######## GRAPHICS / DRAWING ########
+    ####################################
 
     def draw(self,roll=None):
         if roll is None:
@@ -311,9 +355,9 @@ class Game:
         else:
             self.roll = roll
 
-        self.drawGui(roll)
+        self.draw_gui(roll)
 
-    def initGui(self):
+    def init_gui(self):
         pygame.init()
         WIDTH = 800
         HEIGHT = 425
@@ -344,23 +388,23 @@ class Game:
         self.barLocs = {'x':[(376,142),(376,110)],'o':[(376,243),(376,275)]}
         self.board_img = pygame.transform.scale(pygame.image.load('images/board.png'),size)
         self.screen = pygame.display.set_mode(self.board_img.get_rect().size)
-        self.tokIms = {'x':pygame.image.load('images/blackPiece.png'), \
-                           'o':pygame.image.load('images/whitePiece.png')}
-        self.dies = [pygame.transform.scale(pygame.image.load('images/die%d.png'%i),(35,35)) \
-                         for i in range(1,7)]
-        self.offIms = {'x':pygame.transform.scale(pygame.image.load('images/blackOff.png'),(40,18)), \
-                           'o':pygame.transform.scale(pygame.image.load('images/whiteOff.png'),(40,18))}
+        self.tokIms = {'x':pygame.image.load('images/blackPiece.png'),
+                       'o':pygame.image.load('images/whitePiece.png')}
+        self.dies = [pygame.transform.scale(pygame.image.load('images/die%d.png'%i),(35,35))
+                     for i in range(1,7)]
+        self.offIms = {'x':pygame.transform.scale(pygame.image.load('images/blackOff.png'),(40,18)),
+                       'o':pygame.transform.scale(pygame.image.load('images/whiteOff.png'),(40,18))}
         
         outOff = 748
         bOffH = 391
         wOffH = 11
         offSkip = 9
-        self.offLocs = {'x':[(outOff,bOffH-i*offSkip) for i in range(19)], \
-                            'o':[(outOff,wOffH+i*offSkip) for i in range(19)]}
+        self.offLocs = {'x':[(outOff,bOffH-i*offSkip) for i in range(19)],
+                        'o':[(outOff,wOffH+i*offSkip) for i in range(19)]}
         
-    def drawGui(self,roll):
+    def draw_gui(self, roll):
         if self.init:
-            self.initGui()
+            self.init_gui()
         self.screen.blit(self.board_img,self.board_img.get_rect())
         self.screen.blit(self.dies[roll[0]-1],(180,190))
         self.screen.blit(self.dies[roll[1]-1],(220,190))
@@ -381,14 +425,13 @@ class Game:
                 self.screen.blit(self.offIms[t],self.offLocs[t][i])
         pygame.display.flip()
 
-
     def gridLocFromPos(self,pos,player):
         tx,ty = self.tokIms['x'].get_rect().size
 
         def onPiece(pieceLoc,pos,sizex,sizey):
             px,py = pieceLoc
             tx,ty = pos
-            if tx < px+sizex and tx > px:
+            if px+sizex > tx > px:
                 if ty < py+sizey and ty > py:
                     return True
             return False
@@ -402,18 +445,23 @@ class Game:
         # find out if we are on the bar
         for i,bp in enumerate(self.barPieces[player]):
             if onPiece(self.barLocs[player][i],pos,tx,ty):
-                return ON
+                return Game.ON
 
         # find out if we are removing pieces
         offBase = self.offLocs['o'][0] if player=='o' else self.offLocs['x'][-1]
         offHeight = 200
         offWidth,_ = self.offIms['x'].get_rect().size
         if onPiece(offBase,pos,offWidth,offHeight):
-            return OFF
+            return Game.OFF
         
         return None
 
 if __name__=='__main__':
-    g = Game(LAYOUT)
-    g.new_game()
-    g.draw((4,3))
+    g = Game(graphics=True)
+    g.reset()
+    players = [agent.RandomAgent(token=Game.TOKENS[0]), agent.RandomAgent(token=Game.TOKENS[1])]
+
+    done = False
+    while not done:
+        reward, done = g.step(players)
+        time.sleep(0.1)

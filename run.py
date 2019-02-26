@@ -1,84 +1,145 @@
 import time
 import game
-import agent, random, aiAgents
+import agent
+import random
 import numpy as np
-import cPickle as pickle
+import tensorflow as tf
+#from tensorflow.keras import layers
+import itertools
+import tensorboard
+import pickle
+import h5py
 
-def train(numGames=1):
-    gamma = 0.7
-    alpha = 0.1
-    numFeats = (game.NUMCOLS*4+3)*2
-    numHidden = 50
-    scales = [np.sqrt(6./(numFeats+numHidden)), np.sqrt(6./(1+numHidden))]
-    weights = [scales[0]*np.random.randn(numHidden,numFeats),scales[1]*np.random.randn(1,numHidden),
-               np.zeros((numHidden,1)),np.zeros((1,1))]    
-    for it in xrange(numGames):
+def train_model(learning_rate=0.01, trace_decay=0.8, discount_factor=1, n_games=1000, n_hidden=40, path='weights.npy'):
+    """
+    Trains a simple 3 layer neural network to play backgammon by means of reinforcement learning, using the TD(lambda) algorithm
+    :param learning_rate:
+    :param trace_decay:
+    :param discount_factor:
+    :param n_games:
+    :param n_hidden: number of neurons in the hidden layer
+    :param path:
+    :return:
+    """
 
-        g = game.Game(game.LAYOUT)
-        players = [aiAgents.TDAgent(g.players[0],weights,gamma,True), 
-                   aiAgents.TDAgent(g.players[1],weights)]
+    ## Neural network woo
+    # Initialize neural network weights as random normally distributed values, scaled by 2 / sqrt(number of neurons)
+    n_inputs = (game.NUMCOLS * 4 + 3) * 2
+    w1 = np.random.randn(n_inputs, n_hidden) * np.sqrt(2 / (n_inputs))  # Weights input->hidden
+    w2 = np.random.rand(n_hidden, 1) * np.sqrt(2 / (n_hidden))          # Weights hidden->output
+    b1 = np.zeros(n_hidden, 1)                                          # Bias on hidden layer nodes
+    b2 = np.zeros(1,1)                                                  # Bias on output layer node
 
-        winner = run_game(players,g)
+    # TD-lambda uses eligibility traces to keep track of useful gradients
+    trace_w1 = np.zeros_like(w1)
+    trace_w2 = np.zeros_like(w2)
+    trace_b1 = np.zeros_like(b1)
+    trace_b2 = np.zeros_like(b2)
 
-        print "Game : %d/%d"%(it,numGames)
+    def sigmoid(z):
+        return (1 / (1. + np.exp(-z)))
 
-        updates = players[0].computeUpdate(winner)
-        for w,update in zip(weights,updates):
-            w += alpha*update
-        if it%100 == 0:
-            # save weights
-            fid = open("weights.bin",'w')
-            pickle.dump(weights,fid)
-            fid.close()
+    # get board state
+    x = g.extract_features(player=)
 
-    return weights
+    # Forward pass:
+    z1 = np.dot(w1, x) + b1
+    a1 = sigmoid(z1)
+    z2 = np.dot(w2, a1) + b2
+    V = sigmoid(z2)
+
+    # Backprop
+    dV_db2 = V*(1-V)
+    dV_dw2 = dV_db2 * a1.T
+    dV_db1 = dV_db2 * w2.T * a1 * (1-a1)
+    dV_dw1 = dV_db1 * x.T
+
+    # Update eligibility traces
+    trace_w1 = trace_decay * discount_factor * trace_w1 + dV_dw1
+    trace_w2 = trace_decay * discount_factor * trace_w2 + dV_dw2
+    trace_b1 = trace_decay * discount_factor * trace_b1 + dV_db1
+    trace_b2 = trace_decay * discount_factor * trace_b2 + dV_db2
+
+    # Step reward
+    delta = reward + discount_factor * x_new - x_old
+
+    # Update weights
+    w1 += learning_rate * delta * trace_w1
+    w2 += learning_rate * delta * trace_w2
+    b1 += learning_rate * delta * trace_b1
+    b2 += learning_rate * delta * trace_b2
+
+
+
+
+
+    # Set up new weights etc
+
+    for i_game in range(n_games):
+        g = game.new_game()
+
+        players = []
+        trace_ih = np.zeros()
+        over = False
+        playernum = 0
+        for t in itertools.count():
+
+
+            pass
+
+        # Save weights to file every 100th game:
+        if i_game % 100 == 0:
+            np.savez('weight.npy', w1, w2, b1, b2)
 
 def test(players,numGames=100,draw=False):
     winners = [0,0]
-    for _ in xrange(numGames):
+    for _ in range(numGames):
         g = game.Game(game.LAYOUT)
-        winner = run_game(players,g,draw)
-        print "The winner is : Player %s"%players[not winner].player
+        winner = run_game(players, g, draw)
+        print("The winner is : Player %s"%players[not winner].player)
         winners[not winner]+=1
         if draw:
             g.draw()
             time.sleep(10)
-    print "Summary:"
-    print "Player %s : %d/%d"%(players[0].player,winners[0],sum(winners))
-    print "Player %s : %d/%d"%(players[1].player,winners[1],sum(winners))
+    print("Summary:")
+    print("Player %s : %d/%d"%(players[0].player,winners[0], sum(winners)))
+    print("Player %s : %d/%d"%(players[1].player,winners[1], sum(winners)))
+
 
 def run_game(players,g,draw=False):
     g.new_game()
-    playernum = random.randint(0,1)
+    playernum = random.randint(0, 1)
     over = False
     while not over:
-        roll = roll_dice(g)
-        if draw:
+        g.extract_features(players[playernum])
+        roll = g.roll_dice() # roll dice
+        if draw: #draw board
             g.draw(roll)
-        playernum = (playernum+1)%2
-        if playernum:
+        playernum = (playernum + 1) % 2  # Switch players
+        if playernum: # If black is on turn, reverse board
             g.reverse()
-        turn(players[playernum],g,roll,draw)
-        if playernum:
+        turn(players[playernum], g, roll, draw)
+        if playernum: # If black just took a turn, switch board back to white
             g.reverse()
-        over = g.is_over()
+        over = g.is_done()
         if draw:
             time.sleep(.02)
+
     return g.winner()
 
-def turn(player,g,roll,draw=False):
+
+def turn(player, g, roll, draw=False):
+
     if draw:
-        print "Player %s rolled <%d,%d>."%(player.player,roll[0],roll[1])
-    moves = g.getActions(roll,g.players[0],nodups=True)
+        print("Player %s rolled <%d,%d>."%(player.token, roll[0], roll[1]))
+    moves = g.getActions(roll, g.players[0], nodups=True)
     if moves:
-        move = player.getAction(moves,g)
+        move = player.getAction(moves, g)
     else:
         move = None
     if move:
-        g.takeAction(move,g.players[0])
+        g.take_action(move, g.players[0])
 
-def roll_dice(g):
-    return (random.randint(1,g.die), random.randint(1,g.die))
 
 def load_weights(weights):
     if weights is None:
@@ -86,8 +147,9 @@ def load_weights(weights):
             import pickle
             weights = pickle.load(open('weights.bin','r'))
         except IOError:
-            print "You need to train the weights to use the better evaluation function"
+            print("You need to train the weights to use the better evaluation function")
     return weights
+
 
 def main(args=None):
     from optparse import OptionParser
@@ -100,41 +162,41 @@ def main(args=None):
     parser.add_option("-n","--num",dest="numgames",default=1,help="Num games to play")
     parser.add_option("-p","--player1",dest="player1",
                       default="random",help="Choose type of first player")
-    parser.add_option("-e","--eval",dest="eval",action="store_true",default=True,
+    parser.add_option("-e","--eval",dest="eval",action="store_true",default=False,
                         help="Play with the better eval function for player")
 
     (opts,args) = parser.parse_args(args)    
 
     weights = None
 
-    if opts.train:
-        weights = train()
+    # if opts.train:
+    #     weights = train()
         
     if opts.eval:
         weights = load_weights(weights)
-        evalArgs = weights
-        evalFn = aiAgents.nnetEval
-        
+
     p1 = None
     if opts.player1 == 'random':
         p1 = agent.RandomAgent(game.Game.TOKENS[0])
-    elif opts.player1 == 'reflex':
-        p1 = aiAgents.TDAgent(game.Game.TOKENS[0],evalArgs)
-    elif opts.player1 == 'expectimax':
-        p1 = aiAgents.ExpectimaxAgent(game.Game.TOKENS[0],evalFn,evalArgs)
-    elif opts.player1 == 'expectiminimax':
-        p1 = aiAgents.ExpectiMiniMaxAgent(game.Game.TOKENS[0],evalFn,evalArgs)
+    # elif opts.player1 == 'expectimax':
+    #     p1 = agent.RLAgent(game.Game.TOKENS[0], evalFn)
     elif opts.player1 == 'human':
         p1 = agent.HumanAgent(game.Game.TOKENS[0])
 
     p2 = agent.RandomAgent(game.Game.TOKENS[1])
-#    p2 = aiAgents.ExpectiMiniMaxAgent(game.Game.TOKENS[1],evalFn,evalArgs)
+
     if p1 is None:
-        print "Please specify legitimate player"
+        print("Please specify legitimate player")
         import sys
         sys.exit(1)
 
     test([p1,p2],numGames=int(opts.numgames),draw=opts.draw)
 
 if __name__=="__main__":
-    main()
+    # main()
+
+    p1 = agent.HumanAgent(game.Game.TOKENS[0])
+    # p2 = agent.HumanAgent(game.Game.TOKENS[1])
+    # p1 = agent.RandomAgent(game.Game.TOKENS[0])
+    p2 = agent.RandomAgent(game.Game.TOKENS[1])
+    test([p1, p2], numGames=1, draw=True)

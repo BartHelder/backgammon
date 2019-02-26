@@ -1,57 +1,15 @@
 import agent
 import numpy as np
+import tensorflow as tf
+from tensorflow.keras import layers
+import tensorboard
 
-def extractFeatures(state):
-    game,player = state
-    features = []
-    for p in game.players:
-        for col in game.grid:
-            feats = [0.]*6
-            if len(col)>0 and col[0]==p:
-                for i in xrange(len(col)):
-                    feats[min(i,5)] += 1
-            features += feats
-        features.append(float(len(game.barPieces[p]))/2.)
-        features.append(float(len(game.offPieces[p]))/game.numPieces[p])
-    if player == game.players[0]:
-        features += [1.,0.]
-    else:
-        features += [0.,1.]
-    return np.array(features).reshape(-1,1)
 
-class TDAgent(agent.Agent, object):
 
-    def __init__(self, player, weights):
-        super(self.__class__, self).__init__(player)
-        self.w1,self.w2,self.b1,self.b2 = weights
 
-    def getAction(self, actions, game):
-        """
-        Return best action according to self.evaluationFunction,
-        with no lookahead.
-        """
-        bestV = 0
 
-        for a in actions:
-            ateList = game.takeAction(a,self.player)
-            features = extractFeatures((game,game.opponent(self.player)))
-            hiddenAct = 1/(1+np.exp(-(self.w1.dot(features)+self.b1)))
-            v = 1/(1+np.exp(-(self.w2.dot(hiddenAct)+self.b2)))
-            if v>bestV:
-                action = a
-                bestV = v
-            game.undoAction(a,self.player,ateList)
 
-        return action
-
-def nnetEval(state,weights):
-    w1,w2,b1,b2 = weights
-    features = np.array(extractFeatures(state)).reshape(-1,1)
-    hiddenAct = 1/(1+np.exp(-(w1.dot(features)+b1)))
-    v = 1/(1+np.exp(-(w2.dot(hiddenAct)+b2)))
-    return v
-
-class ExpectiMiniMaxAgent(agent.Agent, object):
+class ExpectiMiniMaxAgent(agent.Agent):
 
     def miniMaxNode(self,game,player,roll,depth):
         actions = game.getActions(roll,player,nodups=True)
@@ -66,9 +24,9 @@ class ExpectiMiniMaxAgent(agent.Agent, object):
         if not actions:
             return self.expectiNode(game,game.opponent(player),depth)
         for a in actions:
-            ateList = game.takeAction(a,player)
+            ateList = game.take_action(a, player)
             rollScores.append(self.expectiNode(game,game.opponent(player),depth))
-            game.undoAction(a,player,ateList)
+            game.undo_action(a, player, ateList)
 
         return scoreFn(rollScores)
 
@@ -93,9 +51,9 @@ class ExpectiMiniMaxAgent(agent.Agent, object):
             depth = 0
         outcomes = []
         for a in actions:
-            ateList = game.takeAction(a,self.player)
+            ateList = game.take_action(a, self.player)
             score = self.expectiNode(game,game.opponent(self.player),depth)
-            game.undoAction(a,self.player,ateList)
+            game.undo_action(a, self.player, ateList)
             outcomes.append((score, a))
         action = max(outcomes)[1]
         return action
