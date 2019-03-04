@@ -14,7 +14,7 @@ class Game:
     """
     Object representing a single game. Contains functions to play moves, draw graphics and return winning player.
     """
-    TOKENS = ['o', 'x']  # White, black
+    TOKENS = ['o', 'x']  # white, black
     LAYOUT = "0-2-o,5-5-x,7-3-x,11-5-o,12-5-x,16-3-o,18-5-o,23-2-x"
     NUMCOLS = 24
     QUAD = 6  # number of faces on the dice
@@ -51,8 +51,9 @@ class Game:
 
 
     @staticmethod
-    def new_game():
-        g = Game()
+    def new_game(graphics=False):
+
+        g = Game(graphics=graphics)
         g.reset()
         return g
 
@@ -82,10 +83,14 @@ class Game:
             self.reverse()
         moves = self.get_actions(roll, self.players[0], nodups=True) # Find all legal moves for this roll
         move = players[self.playernum].get_action(moves, self) if moves else None
+        # print("P", self.playernum, " does ", move)
         if move:
             self.take_action(move, self.players[0])
         if self.playernum:  # If black just took his turn, flip the board back to normal 
             self.reverse()
+
+        if self.graphics:
+            self.draw(roll)
 
         done = self.is_done()
         reward = int(self.is_won(players[0].token))  # Reward is 1 only if player 1 (white) has just won
@@ -104,7 +109,7 @@ class Game:
         """
         done = False
         while not done:
-            self.step(players)
+            reward, done = self.step(players)
         return self.winner()
 
 
@@ -351,7 +356,7 @@ class Game:
                     else:
                         raise NotImplementedError('Unknown method specified, exiting')
 
-                elif lc == 0 or col[0] != p:
+                else:
                     feats = [0., 0., 0., 0.]
                 features += feats
             features.append(len(self.barPieces[p]) / 2)
@@ -362,7 +367,7 @@ class Game:
         else:
             features += [0., 1.]
 
-        return np.array(features).reshape(-1, 1)
+        return np.array(features).reshape(1, -1)
 
     ####################################
     ######## GRAPHICS / DRAWING ########

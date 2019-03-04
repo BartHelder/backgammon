@@ -27,11 +27,11 @@ class Agent:
     def __init__(self, token):
         self.token = token
     
-    def get_action(self,moves,game=None):
+    def get_action(self, moves, game=None):
         raise NotImplementedError("Override me")
 
 class RandomAgent(Agent):
-    def getAction(self, moves, game=None):
+    def get_action(self, moves, game=None):
         if moves:
             return random.choice(list(moves))
         return None
@@ -130,15 +130,24 @@ class RLAgent(Agent):
         super().__init__(token)
         self.w1, self.w2, self.b1, self.b2 = weights
 
+
     def load_weights(self, path='weights.npz'):
         self.w1, self.w2, self.b1, self.b2 = np.load(path)
 
-    def evaluate_state(self, features):
-        hiddenAct = 1 / (1 + np.exp(-(self.w1.dot(features) + self.b1)))
-        v = 1 / (1 + np.exp(-(self.w2.dot(hiddenAct) + self.b2)))
-        return v
 
-    def get_action(self, actions, game):
+    def evaluate_state(self, x):
+        """
+        Evaluate neural network to obtain value estimate of current state
+        :param x: feature vector of current board state (1x198)
+        :return V_hat: estimated value of current board state (float)
+        """
+
+        a1 = 1 / (1 + np.exp(-(x.dot(self.w1) + self.b1)))
+        V_hat = 1 / (1 + np.exp(-(a1.dot(self.w2) + self.b2)))
+        return V_hat
+
+
+    def get_action(self, moves, game):
 
         """
         Return optimal action according to feed forward neural network with weights w1, w2, b1, b2
@@ -148,20 +157,17 @@ class RLAgent(Agent):
         """
 
         bestV = 0
-        worstV = 1
 
-        for a in actions:
+        for a in moves:
             ateList = game.take_action(a, self.token)
-            features = game.extract_features((game,game.opponent(self.token)))
+            features = game.extract_features((game, game.opponent(self.token)), method='modified')
             v = self.evaluate_state(features)
-            if self.token == Game.TOKENS[0]:
-                if v>bestV:
-                    action = a
-                    bestV = v
-            elif self.token == Game.TOKENS[1]:
-                if v<worstV:
-                    action = a
-                    worstV = v
+            if self.token == Game.TOKENS[1]:  # Invert board valuation if we're looking at black
+                v = 1. - v
+            if v > bestV:
+                action = a
+                bestV = v
+
             game.undo_action(a, self.token, ateList)
 
         return action
