@@ -1,9 +1,10 @@
 import time
 from game import Game
 from agent import RandomAgent, HumanAgent, RLAgent
-
+import pickle
+import json
 import sys
-from multiprocessing import Process
+import multiprocessing as mp
 import random
 import numpy as np
 import tensorflow as tf
@@ -13,20 +14,18 @@ import tensorboard
 import pickle
 import h5py
 
-def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidden=40, weights=None, path='weights.npz'):
-
+def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidden=40, weights=None, name='file'):
     """
     Trains a simple 3 layer neural network to play backgammon by means of reinforcement learning, using the TD(lambda) algorithm
     :param learning_rate:
     :param trace_decay:
-    :param discount_factor:
-    :param n_games:
-    :param n_hidden: number of neurons in the hidden layer
-    :param path:
+    :param num_episodes:
+    :param n_hidden:
+    :param weights:
+    :param name:
     :return:
     """
 
-    ## Neural network woo
     if weights is not None:
         w1, w2, b1, b2 = weights
     else:
@@ -42,21 +41,25 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
         return (1 / (1. + np.exp(-z)))
 
     stats = {'episode_lengths': np.zeros(num_episodes), 'episode_winners': np.zeros(num_episodes)}
-    test_results = []
+    test_results = {}
     players = [RLAgent(Game.TOKENS[0], weights=weights), RLAgent(Game.TOKENS[1], weights=weights)]
 
-    for i_episode in range(num_episodes):
+    test_episodes = [0, 100, 250, 500, 750, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 9999]
 
-        if (i_episode + 1) % 100 == 0:
+    for i_episode in range(1, num_episodes+1):
+
+        if (i_episode % 100) == 0:
             # Output where we are now and save the weights to file
-            np.savez(path, w1=w1, w2=w2, b1=b1, b2=b2)
+            np.savez('weights_'+name+'.npz', w1=w1, w2=w2, b1=b1, b2=b2)
             print("\rEpisode {}/{}".format(i_episode+1, num_episodes), end="")
             sys.stdout.flush()
 
-        if (i_episode) % 1000 == 0:
+        if i_episode in test_episodes:
             testplayers = [RLAgent(token=Game.TOKENS[0], weights=weights), RandomAgent(token=Game.TOKENS[1])]
             current_winrate = test(testplayers)
-            test_results.append(current_winrate)
+            test_results[i_episode] = current_winrate
+            with open('results_' + name + '.json', 'w') as f:
+                json.dump(test_results, f)
 
         # Reset eligibility traces to zero
         trace_w1 = np.zeros_like(w1)
@@ -91,7 +94,7 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
             trace_b2 = trace_decay * trace_b2 + dV_db2
 
             # Step reward
-            delta = V_new - V if not done else reward - V
+            delta = (reward - V) if done else (V_new - V)
             update = learning_rate * delta
 
             # Update weights
@@ -131,26 +134,19 @@ def test(players, numGames=100, draw=False):
     return winrate_white
 
 
-if __name__=="__main__":
-    # main()
+if __name__ == "__main__":
 
-    # p1 = agent.HumanAgent(game.Game.TOKENS[0])
-    # # p2 = agent.HumanAgent(game.Game.TOKENS[1])
-    # # p1 = agent.RandomAgent(game.Game.TOKENS[0])
-    # p2 = agent.RandomAgent(game.Game.TOKENS[1])
-    # test([p1, p2], numGames=1, draw=True)
-
-    run_multi = 0
+    run_multi = 1
     np.random.seed(0)
 
     if run_multi:
-        tdlist = [0.95, 0.9, 0.8, 0.7]
-        pathlist =['weights_trace095.npz','weights_trace09.npz','weights_trace08.npz','weights_trace07.npz']
+        tdlist = [0.975, 0.95, 0.9, 0.85,  0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.]
+        pathlist =['trace0975', 'trace095','trace09','trace085','trace08','trace07',
+                   'trace06','trace05','trace04','trace03','trace02','trace01','trace00']
 
         jobs = []
         for i in range(0, 4):
-            out_list = list()
-            process = Process(target=train_model, args=(0.01, tdlist[i], 10, 40, None, pathlist[i]))
+            process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
             jobs.append(process)
 
         for j in jobs:
@@ -159,7 +155,33 @@ if __name__=="__main__":
         for j in jobs:
             j.join()
 
-        print("done!")
+        print("Set 1/3 done ")
+
+        jobs = []
+        for i in range(4, 8):
+            process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
+            jobs.append(process)
+
+        for j in jobs:
+            j.start()
+
+        for j in jobs:
+            j.join()
+
+        print("Set 2/3 done")
+
+        jobs = []
+        for i in range(8, 12):
+            process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
+            jobs.append(process)
+
+        for j in jobs:
+            j.start()
+
+        for j in jobs:
+            j.join()
+
+        print("Jobs done!!!!!")
 
     else:
 
