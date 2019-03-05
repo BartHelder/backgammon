@@ -1,12 +1,7 @@
 import random
 from game import Game
 import numpy as np
-import tensorflow as tf
-#from tensorflow.keras import layers
-import itertools
-import tensorboard
-import pickle
-import h5py
+
 
 try:
     import pygame

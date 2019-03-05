@@ -1,27 +1,23 @@
 import time
 from game import Game
 from agent import RandomAgent, HumanAgent, RLAgent
-import pickle
 import json
 import sys
 import multiprocessing as mp
-import random
 import numpy as np
-import tensorflow as tf
-#from tensorflow.keras import layers
 import itertools
-import tensorboard
-import pickle
-import h5py
 
-def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidden=40, weights=None, name='file'):
+
+def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidden=40, weights=None, do_tests=True, save=True, name='file'):
     """
-    Trains a simple 3 layer neural network to play backgammon by means of reinforcement learning, using the TD(lambda) algorithm
+
     :param learning_rate:
     :param trace_decay:
     :param num_episodes:
     :param n_hidden:
     :param weights:
+    :param test:
+    :param save:
     :param name:
     :return:
     """
@@ -32,7 +28,7 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
         # Initialize neural network weights as random normally distributed values, scaled by 2 / sqrt(number of neurons)
         n_inputs = (Game.NUMCOLS * 4 + 3) * 2
         w1 = np.random.randn(n_inputs, n_hidden) * np.sqrt(2 / (n_inputs))  # Weights input->hidden
-        w2 = np.random.randn(n_hidden, 1) * np.sqrt(2 / (n_hidden))          # Weights hidden->output
+        w2 = np.random.randn(n_hidden, 1) * np.sqrt(2 / (n_hidden))         # Weights hidden->output
         b1 = np.zeros((1, n_hidden))                                        # Bias on hidden layer nodes
         b2 = np.zeros((1,1))                                                # Bias on output layer node
         weights = [w1, w2, b1, b2]
@@ -43,23 +39,24 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
     stats = {'episode_lengths': np.zeros(num_episodes), 'episode_winners': np.zeros(num_episodes)}
     test_results = {}
     players = [RLAgent(Game.TOKENS[0], weights=weights), RLAgent(Game.TOKENS[1], weights=weights)]
-
-    test_episodes = [0, 100, 250, 500, 750, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 9999]
+    test_episodes = [1, 100, 250, 500, 750, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 9999]
 
     for i_episode in range(1, num_episodes+1):
 
         if (i_episode % 100) == 0:
             # Output where we are now and save the weights to file
-            np.savez('weights_'+name+'.npz', w1=w1, w2=w2, b1=b1, b2=b2)
+            if save:
+                np.savez('weights_'+name+'.npz', w1=w1, w2=w2, b1=b1, b2=b2)
             print("\rEpisode {}/{}".format(i_episode+1, num_episodes), end="")
             sys.stdout.flush()
 
-        if i_episode in test_episodes:
+        if do_tests and i_episode in test_episodes:
             testplayers = [RLAgent(token=Game.TOKENS[0], weights=weights), RandomAgent(token=Game.TOKENS[1])]
             current_winrate = test(testplayers)
             test_results[i_episode] = current_winrate
-            with open('results_' + name + '.json', 'w') as f:
-                json.dump(test_results, f)
+            if save:
+                with open('results_' + name + '.json', 'w') as f:
+                    json.dump(test_results, f)
 
         # Reset eligibility traces to zero
         trace_w1 = np.zeros_like(w1)
@@ -72,6 +69,7 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
         x = g.extract_features(player=players[g.playernum].token, method='modified')
         V = players[0].evaluate_state(x)
 
+        #  Play out game, observe state transitions and rewards, update weights and traces
         for t in itertools.count():
 
             reward, done = g.step(players)
@@ -115,21 +113,29 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
     return stats, test_results
 
 
-def test(players, numGames=100, draw=False):
-
+def test(players, num_games=100, graphics=False, log=False):
+    """
+    Compare the performance of two players over a set number of games.
+    :param players: list of two instances of Agent child-classes, will play against each other
+    :param num_games: amount of games that will be played
+    :param draw: if True, display games on screen
+    :param log: display summary of test results
+    :return: percentage of games that Player 0 (white) has won
+    """
     winners = [0,0]
-    print("Starting test run... ")
-    for _ in range(numGames):
-        g = Game.new_game(graphics=draw)
+    if log:
+        print("Starting test run of %d games... "%num_games)
+    for i_game in range(num_games):
+        g = Game.new_game(graphics=graphics)
         winner = g.play(players)
-        #print("The winner is : Player %s"%testplayers[winner].token)
         winners[winner]+=1
-        if draw:
+        if graphics:
             time.sleep(10)
     winrate_white = winners[0] / sum(winners)
-    print("Summary:")
-    print("Player %s : %d/%d"%(players[0].token, winners[0], sum(winners)))
-    print("Player %s : %d/%d"%(players[1].token, winners[1], sum(winners)))
+    if log:
+        print("Summary:")
+        print("Player %s : %d/%d"%(players[0].token, winners[0], sum(winners)))
+        print("Player %s : %d/%d"%(players[1].token, winners[1], sum(winners)))
 
     return winrate_white
 
@@ -144,44 +150,47 @@ if __name__ == "__main__":
         pathlist =['trace0975', 'trace095','trace09','trace085','trace08','trace07',
                    'trace06','trace05','trace04','trace03','trace02','trace01','trace00']
 
-        jobs = []
-        for i in range(0, 4):
-            process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
-            jobs.append(process)
+        for j in range(0,3):
+            jobs = []
+            for i in range(0+4*j, 4+4*j):
+                process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
+                jobs.append(process)
 
-        for j in jobs:
-            j.start()
+            for j in jobs:
+                j.start()
 
-        for j in jobs:
-            j.join()
+            for j in jobs:
+                j.join()
 
-        print("Set 1/3 done ")
+            print("Set %d/3 done "%(j+1))
 
-        jobs = []
-        for i in range(4, 8):
-            process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
-            jobs.append(process)
 
-        for j in jobs:
-            j.start()
 
-        for j in jobs:
-            j.join()
-
-        print("Set 2/3 done")
-
-        jobs = []
-        for i in range(8, 12):
-            process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
-            jobs.append(process)
-
-        for j in jobs:
-            j.start()
-
-        for j in jobs:
-            j.join()
-
-        print("Jobs done!!!!!")
+        # jobs = []
+        # for i in range(4, 8):
+        #     process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
+        #     jobs.append(process)
+        #
+        # for j in jobs:
+        #     j.start()
+        #
+        # for j in jobs:
+        #     j.join()
+        #
+        # print("Set 2/3 done")
+        #
+        # jobs = []
+        # for i in range(8, 12):
+        #     process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
+        #     jobs.append(process)
+        #
+        # for j in jobs:
+        #     j.start()
+        #
+        # for j in jobs:
+        #     j.join()
+        #
+        # print("Jobs done!!!!!")
 
     else:
 
