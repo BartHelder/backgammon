@@ -8,7 +8,7 @@ import numpy as np
 import itertools
 
 
-def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidden=40, weights=None, do_tests=True, save=True, name='file'):
+def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidden=40, weights=None, do_tests=True, test_games=400, save=True, name='file'):
     """
 
     :param learning_rate:
@@ -36,23 +36,23 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
     def sigmoid(z):
         return (1 / (1. + np.exp(-z)))
 
-    stats = {'episode_lengths': np.zeros(num_episodes), 'episode_winners': np.zeros(num_episodes)}
+    #stats = {'episode_lengths': np.zeros(num_episodes), 'episode_winners': np.zeros(num_episodes)}
     test_results = {}
     players = [RLAgent(Game.TOKENS[0], weights=weights), RLAgent(Game.TOKENS[1], weights=weights)]
-    test_episodes = [1, 100, 250, 500, 750, 1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000, 9999]
+    test_episodes = [1, 100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7000, 8000, 9000, 9999]
 
     for i_episode in range(1, num_episodes+1):
 
         if (i_episode % 100) == 0:
             # Output where we are now and save the weights to file
             if save:
-                np.savez('weights_'+name+'.npz', w1=w1, w2=w2, b1=b1, b2=b2)
+                np.savez('w_'+name+'.npz', w1=w1, w2=w2, b1=b1, b2=b2)
             print("\rEpisode {}/{}".format(i_episode+1, num_episodes), end="")
             sys.stdout.flush()
 
         if do_tests and i_episode in test_episodes:
             testplayers = [RLAgent(token=Game.TOKENS[0], weights=weights), RandomAgent(token=Game.TOKENS[1])]
-            current_winrate = test(testplayers)
+            current_winrate = test(testplayers, num_games=test_games)
             test_results[i_episode] = current_winrate
             if save:
                 with open('results_' + name + '.json', 'w') as f:
@@ -107,10 +107,10 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
             V = V_new
             x = x_new
 
-        stats['episode_lengths'][i_episode] = t
-        stats['episode_winners'][i_episode] = reward
+        #stats['episode_lengths'][i_episode] = t
+        #stats['episode_winners'][i_episode] = reward
 
-    return stats, test_results
+    return test_results
 
 
 def test(players, num_games=100, graphics=False, log=False):
@@ -145,15 +145,20 @@ if __name__ == "__main__":
     run_multi = 1
     np.random.seed(0)
 
-    if run_multi:
-        tdlist = [0.975, 0.95, 0.9, 0.85,  0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.]
-        pathlist =['trace0975', 'trace095','trace09','trace085','trace08','trace07',
-                   'trace06','trace05','trace04','trace03','trace02','trace01','trace00']
+    # Args list:
+    # learning_rate, trace_decay, num_episode, n_hidden, weights, do_tests, save, name
 
-        for j in range(0,3):
+    if run_multi:
+        tdlist = [0.975, 0.95, 0.9, 0.85,  0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
+        pathss = ['t0975', 't0950', 't0900', 't08500','t0800','t0700',
+                   't0600','t0500','t0400','t0300','t0200','t0100']
+        #pathlist =['trace0975', 'trace095','trace09','trace085','trace08','trace07',
+        #           'trace06','trace05','trace04','trace03','trace02','trace01','trace00']
+
+        for l in range(0,3):
             jobs = []
-            for i in range(0+4*j, 4+4*j):
-                process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
+            for i in range(0+4*l, 4+4*l):
+                process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, True, True, pathss[i]))
                 jobs.append(process)
 
             for j in jobs:
@@ -162,7 +167,7 @@ if __name__ == "__main__":
             for j in jobs:
                 j.join()
 
-            print("Set %d/3 done "%(j+1))
+            print("Set %d/3 done "%(l+1))
 
 
 

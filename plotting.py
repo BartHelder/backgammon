@@ -37,7 +37,7 @@ def plot_trace_stats(input, c):
     for key, value in input:
         plt.plot(*zip(*value.items()), label=key, color=getColor(c, len(input), index))
         index += 1
-    plt.legend()
+    plt.legend(title='$\lambda$ [-]')
     plt.xlabel("Episode (-)")
     plt.ylabel("Fraction of games won (-)")
     plt.show()
