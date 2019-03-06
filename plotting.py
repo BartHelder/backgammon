@@ -9,10 +9,10 @@ import os
 results = []
 filelist = os.listdir('Results')
 for i in filelist:
-    if i.endswith(".json") and i.startswith("results_"):
+    if i.endswith(".json") and i.startswith("results_t0"):
         with open('Results/'+i, 'r') as f:
             tmp = json.load(f)
-            results.append((float(i[13:-5])/1000, tmp))
+            results.append((float(i[10:-5])/1000, tmp))
 
 results.sort()
 
@@ -35,7 +35,7 @@ def plot_trace_stats(input, c):
     plt.legend()
     index = 0
     for key, value in input:
-        plt.plot(*zip(*value.items()), label=key, color=getColor(c, len(input), index))
+        plt.plot(*zip(*value.items()), label=key, color=getColor(c, len(input), len(input)-index))
         index += 1
     plt.legend(title='$\lambda$ [-]')
     plt.xlabel("Episode (-)")

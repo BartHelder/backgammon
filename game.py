@@ -77,7 +77,6 @@ class Game:
         if self.graphics:
             self.draw(roll)
             print("Player %s rolled <%d,%d>." % (players[self.playernum].token, roll[0], roll[1]))
-
         if self.playernum:  # If black is on turn, flip the board around so black has the right (forward) perspective
             self.reverse()
         moves = self.get_actions(roll, self.players[0], nodups=True)  # Find all legal moves for this roll
@@ -86,9 +85,6 @@ class Game:
             self.take_action(move, self.players[0])
         if self.playernum:  # If black just took his turn, flip the board back to normal 
             self.reverse()
-
-        if self.graphics:
-            self.draw(roll)
 
         done = self.is_done()
         reward = int(self.is_won(players[0].token))  # Reward is 1 only if player 1 (white) has just won

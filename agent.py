@@ -33,7 +33,7 @@ class RandomAgent(Agent):
 
 class HumanAgent(Agent):
 
-    def getAction(self,moves,game=None):
+    def get_action(self,moves,game=None):
         loc = None
         movesLeft = copy.deepcopy(moves)
         pmove = []

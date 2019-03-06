@@ -8,7 +8,7 @@ import numpy as np
 import itertools
 
 
-def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidden=40, weights=None, do_tests=True, test_games=400, save=True, name='file'):
+def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidden=40, weights=None, do_tests=True, test_games=400, save=False, name='file'):
     """
 
     :param learning_rate:
@@ -39,15 +39,16 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
     #stats = {'episode_lengths': np.zeros(num_episodes), 'episode_winners': np.zeros(num_episodes)}
     test_results = {}
     players = [RLAgent(Game.TOKENS[0], weights=weights), RLAgent(Game.TOKENS[1], weights=weights)]
-    test_episodes = [1, 100, 250, 500, 750, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7000, 8000, 9000, 9999]
+    test_episodes = set(list(range(0, num_episodes, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
+
 
     for i_episode in range(1, num_episodes+1):
 
         if (i_episode % 100) == 0:
             # Output where we are now and save the weights to file
             if save:
-                np.savez('w_'+name+'.npz', w1=w1, w2=w2, b1=b1, b2=b2)
-            print("\rEpisode {}/{}".format(i_episode+1, num_episodes), end="")
+                np.savez('weights/w_'+name+'.npz', w1=w1, w2=w2, b1=b1, b2=b2)
+            print("\rEpisode {}/{}".format(i_episode, num_episodes), end="")
             sys.stdout.flush()
 
         if do_tests and i_episode in test_episodes:
@@ -140,6 +141,77 @@ def test(players, num_games=100, graphics=False, log=False):
     return winrate_white
 
 
+def RL_player_from_saved_weights(token, identifier):
+    """
+    Extract weights from saved .npz file to create a trained RLAgent
+    :param token: Will this player play as white or black? (Game.TOKENS[0] or [1])
+    :param identifier: identifies saved weight. agent weights will be saved as 'w_identifier.npz'
+    :return: trained RLAgent player
+    """
+    data = np.load('weights/w_'+identifier+'.npz')
+    weights = [data['w1'], data['w2'], data['b1'], data['b2']]
+    player = RLAgent(token=token, weights=weights)
+
+    return player
+
+
+def battle_trained_players(fightlist, filepath):
+
+    """
+    Tests a number of trained RL agents against each other by having them fight 1000 matches. Saves result to .json
+    :param fightlist: list of tuples,
+    """
+    results = {}
+
+    for f in fightlist[2:]:
+        p1 = RL_player_from_saved_weights('o', f[0])
+        p2 = RL_player_from_saved_weights('x', f[1])
+        players = [p1, p2]
+        print("%s  vs  %s" % (f[0], f[1]))
+        result = test(players, num_games=1000, log=True)
+        results[f[0]+'-'+f[1]] = result
+
+    with open(filepath, 'w') as f:
+        json.dump(results, f)
+
+
+def play_trained_agent(identifier):
+    """
+    Play a game (as human agent) vs a trained RL agent
+    :param identifier: identifies saved weight. agent weights will be saved as 'w_identifier.npz'
+    :return:
+    """
+    players = [HumanAgent(Game.TOKENS[0]), RL_player_from_saved_weights('x', identifier)]
+    test(players, num_games=1, graphics=True, log=True)
+
+
+def train_test_lambdas():
+
+    tdlist = [0.975, 0.95, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
+    pathss = ['t0975', 't0950', 't0900', 't0850', 't0800', 't0700',
+              't0600', 't0500', 't0400', 't0300', 't0200', 't0100']
+    # pathlist =['trace0975', 'trace095','trace09','trace085','trace08','trace07',
+    #           'trace06','trace05','trace04','trace03','trace02','trace01','trace00']
+
+    learning_rate = 0.01
+    num_games = 20000
+    n_hidden = 40
+
+    # Use 4 cores at a time for three sets to make training manageable overnight
+    for l in range(0, 3):
+        jobs = []
+        for i in range(0 + 4 * l, 4 + 4 * l):
+            process = mp.Process(target=train_model,
+                                 args=(learning_rate, tdlist[i], num_games, n_hidden, None, True, 400, True, pathss[i]))
+            jobs.append(process)
+        for j in jobs:
+            j.start()
+        for j in jobs:
+            j.join()
+
+        print("Set %d/3 done " % (l + 1))
+
+
 if __name__ == "__main__":
 
     run_multi = 1
@@ -148,64 +220,14 @@ if __name__ == "__main__":
     # Args list:
     # learning_rate, trace_decay, num_episode, n_hidden, weights, do_tests, save, name
 
-    if run_multi:
-        tdlist = [0.975, 0.95, 0.9, 0.85,  0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
-        pathss = ['t0975', 't0950', 't0900', 't08500','t0800','t0700',
-                   't0600','t0500','t0400','t0300','t0200','t0100']
-        #pathlist =['trace0975', 'trace095','trace09','trace085','trace08','trace07',
-        #           'trace06','trace05','trace04','trace03','trace02','trace01','trace00']
 
-        for l in range(0,3):
-            jobs = []
-            for i in range(0+4*l, 4+4*l):
-                process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, True, True, pathss[i]))
-                jobs.append(process)
 
-            for j in jobs:
-                j.start()
-
-            for j in jobs:
-                j.join()
-
-            print("Set %d/3 done "%(l+1))
+    ## Now lets test them vs each other
+    # fightlist = [('0975', '0950'), ('0950', '0900'), ('0900', '0850'),
+    #              ('0975', '0900'), ('0975', '0850'), ('0950', '0800'), ('0950', '0700')]
 
 
 
-        # jobs = []
-        # for i in range(4, 8):
-        #     process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
-        #     jobs.append(process)
-        #
-        # for j in jobs:
-        #     j.start()
-        #
-        # for j in jobs:
-        #     j.join()
-        #
-        # print("Set 2/3 done")
-        #
-        # jobs = []
-        # for i in range(8, 12):
-        #     process = mp.Process(target=train_model, args=(0.01, tdlist[i], 10000, 40, None, pathlist[i]))
-        #     jobs.append(process)
-        #
-        # for j in jobs:
-        #     j.start()
-        #
-        # for j in jobs:
-        #     j.join()
-        #
-        # print("Jobs done!!!!!")
 
-    else:
 
-        stats, tr = train_model()
-        # data = np.load('weights_trace08.npz')
-        # w1 = data['w1']
-        # w2 = data['w2']
-        # b1 = data['b1']
-        # b2 = data['b2']
-        # weights = [w1, w2, b1, b2]
-        #
-        # players = [RLAgent(Game.TOKENS[0], weights=weights), RandomAgent(Game.TOKENS[1])]
-        # test(players)
+    play_trained_agent('t0975')
