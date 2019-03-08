@@ -7,8 +7,11 @@ import multiprocessing as mp
 import numpy as np
 import itertools
 
+num_eps = 10000
+test_eps = set(list(range(0, num_eps, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
 
-def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidden=40, weights=None, do_tests=True, test_games=400, save=False, name='file'):
+def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=num_eps, n_hidden=40, weights=None, do_tests=True,
+                test_games=400, test_episodes=test_eps, save=False, name='file'):
     """
 
     :param learning_rate:
@@ -39,7 +42,8 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=10000, n_hidde
     #stats = {'episode_lengths': np.zeros(num_episodes), 'episode_winners': np.zeros(num_episodes)}
     test_results = {}
     players = [RLAgent(Game.TOKENS[0], weights=weights), RLAgent(Game.TOKENS[1], weights=weights)]
-    test_episodes = set(list(range(0, num_episodes, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
+    if test_episodes is None:
+        test_episodes = []
 
 
     for i_episode in range(1, num_episodes+1):
@@ -190,11 +194,11 @@ def train_test_lambdas():
     tdlist = [0.975, 0.95, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
     pathss = ['t0975', 't0950', 't0900', 't0850', 't0800', 't0700',
               't0600', 't0500', 't0400', 't0300', 't0200', 't0100']
-    # pathlist =['trace0975', 'trace095','trace09','trace085','trace08','trace07',
-    #           'trace06','trace05','trace04','trace03','trace02','trace01','trace00']
 
     learning_rate = 0.01
-    num_games = 20000
+    num_episodes = 20000
+    test_episodes = set(list(range(0, num_episodes, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
+
     n_hidden = 40
 
     # Use 4 cores at a time for three sets to make training manageable overnight
@@ -202,7 +206,8 @@ def train_test_lambdas():
         jobs = []
         for i in range(0 + 4 * l, 4 + 4 * l):
             process = mp.Process(target=train_model,
-                                 args=(learning_rate, tdlist[i], num_games, n_hidden, None, True, 400, True, pathss[i]))
+                                 args=(learning_rate, tdlist[i], num_episodes, n_hidden, None,
+                                       True, 400, test_episodes, True, pathss[i]))
             jobs.append(process)
         for j in jobs:
             j.start()
@@ -217,15 +222,16 @@ def train_test_n_hidden():
     paths = ['h20', 'h30', 'h35', 'h40', 'h45', 'h50', 'h60']
 
     learning_rate = 0.01
-    num_games = 20000
+    num_episodes = 20000
     lamda = 0.9
-
+    test_episodes = set(list(range(0, num_episodes, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
     # Use 4 cores at a time for three sets to make training manageable overnight
-    for l in range(0, 3):
+    for l in range(0, len(n_hidden_list)//4):
         jobs = []
         for i in range(0 + 4 * l, 4 + 4 * l):
             process = mp.Process(target=train_model,
-                                 args=(learning_rate, lamda, num_games, n_hidden_list, None, True, 400, True, paths[i]))
+                                 args=(learning_rate, lamda, num_episodes, n_hidden_list[i], None,
+                                       True, 400, test_episodes, True, paths[i]))
             jobs.append(process)
         for j in jobs:
             j.start()
@@ -234,6 +240,30 @@ def train_test_n_hidden():
 
         print("Set %d/3 done " % (l + 1))
 
+def train_test_alphas_lamdas():
+
+    num_games = 4000
+    learning_rate_list = [0.001, 0.0025, 0.005, 0.0075, 0.01, 0.05, 0.1, 0.2]
+    lamda_list = [0.975, 0.9, 0.8, 0.6, 0.4]
+    argslist = list(itertools.product(learning_rate_list, lamda_list))
+    paths = ['al_' + str(x) + '-' + str(y) for x, y in (argslist)]
+
+    num_sets = len(argslist)//4
+    # Use 4 cores at a time for three sets to make training manageable overnight
+    for l in range(0, num_sets):
+        jobs = []
+        for i in range(0 + 4*l, 4 + 4*l):
+            process = mp.Process(target=train_model,
+                                 args=(argslist[i][0], argslist[i][1], num_games, 40, None, True, 1000, True, paths[i]))
+            jobs.append(process)
+        for j in jobs:
+            j.start()
+        for j in jobs:
+            j.join()
+
+        print("Set %d/%d done " % (l + 1, num_sets))
+
+
 if __name__ == "__main__":
 
     run_multi = 1
@@ -241,15 +271,9 @@ if __name__ == "__main__":
 
     # Args list:
     # learning_rate, trace_decay, num_episode, n_hidden, weights, do_tests, save, name
-
+    train_test_n_hidden()
 
 
     ## Now lets test them vs each other
     # fightlist = [('0975', '0950'), ('0950', '0900'), ('0900', '0850'),
     #              ('0975', '0900'), ('0975', '0850'), ('0950', '0800'), ('0950', '0700')]
-
-
-
-
-
-    play_trained_agent('t0975')
