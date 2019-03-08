@@ -211,6 +211,28 @@ def train_test_lambdas():
 
         print("Set %d/3 done " % (l + 1))
 
+def train_test_n_hidden():
+
+    n_hidden_list = [20, 25, 30, 35, 40, 45, 50, 60]
+    paths = ['h20', 'h30', 'h35', 'h40', 'h45', 'h50', 'h60']
+
+    learning_rate = 0.01
+    num_games = 20000
+    lamda = 0.9
+
+    # Use 4 cores at a time for three sets to make training manageable overnight
+    for l in range(0, 3):
+        jobs = []
+        for i in range(0 + 4 * l, 4 + 4 * l):
+            process = mp.Process(target=train_model,
+                                 args=(learning_rate, lamda, num_games, n_hidden_list, None, True, 400, True, paths[i]))
+            jobs.append(process)
+        for j in jobs:
+            j.start()
+        for j in jobs:
+            j.join()
+
+        print("Set %d/3 done " % (l + 1))
 
 if __name__ == "__main__":
 
