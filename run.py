@@ -167,7 +167,7 @@ def battle_trained_players(fightlist, filepath):
     """
     results = {}
 
-    for f in fightlist[2:]:
+    for f in fightlist:
         p1 = RL_player_from_saved_weights('o', f[0])
         p2 = RL_player_from_saved_weights('x', f[1])
         players = [p1, p2]
@@ -216,21 +216,21 @@ def train_test_lambdas():
 
         print("Set %d/3 done " % (l + 1))
 
-def train_test_n_hidden():
+def train_test_n_hidden(starting_weights):
 
-    n_hidden_list = [20, 25, 30, 35, 40, 45, 50, 60]
+    n_hidden_list = [10, 20, 30, 40, 50, 60, 70, 80]
     paths = ['h20', 'h30', 'h35', 'h40', 'h45', 'h50', 'h60']
 
     learning_rate = 0.01
     num_episodes = 20000
-    lamda = 0.9
+    lamda = 0.8
     test_episodes = set(list(range(0, num_episodes, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
     # Use 4 cores at a time for three sets to make training manageable overnight
     for l in range(0, len(n_hidden_list)//4):
         jobs = []
-        for i in range(0 + 4 * l, 4 + 4 * l):
+        for i in range(0 + 4 * l, min(4 + 4 * l, 7)):
             process = mp.Process(target=train_model,
-                                 args=(learning_rate, lamda, num_episodes, n_hidden_list[i], None,
+                                 args=(learning_rate, lamda, num_episodes, n_hidden_list[i], starting_weights,
                                        True, 400, test_episodes, True, paths[i]))
             jobs.append(process)
         for j in jobs:
@@ -240,10 +240,11 @@ def train_test_n_hidden():
 
         print("Set %d/3 done " % (l + 1))
 
-def train_test_alphas_lamdas():
+def train_test_alphas_lamdas(starting_weights):
+
 
     num_games = 4000
-    learning_rate_list = [0.001, 0.0025, 0.005, 0.0075, 0.01, 0.05, 0.1, 0.2]
+    learning_rate_list = [0.015, 0.02, 0.03, 0.04]
     lamda_list = [0.975, 0.9, 0.8, 0.6, 0.4]
     argslist = list(itertools.product(learning_rate_list, lamda_list))
     paths = ['al_' + str(x) + '-' + str(y) for x, y in (argslist)]
@@ -254,7 +255,7 @@ def train_test_alphas_lamdas():
         jobs = []
         for i in range(0 + 4*l, 4 + 4*l):
             process = mp.Process(target=train_model,
-                                 args=(argslist[i][0], argslist[i][1], num_games, 40, None, True, 1000, True, paths[i]))
+                                 args=(argslist[i][0], argslist[i][1], num_games, 40, starting_weights, True, 1000, [num_games], True, paths[i]))
             jobs.append(process)
         for j in jobs:
             j.start()
@@ -271,9 +272,9 @@ if __name__ == "__main__":
 
     # Args list:
     # learning_rate, trace_decay, num_episode, n_hidden, weights, do_tests, save, name
-    train_test_n_hidden()
 
+    data = np.load('starting_w.npz')
+    starting_weights = [data['w1'], data['w2'], data['b1'], data['b2']]
 
-    ## Now lets test them vs each other
-    # fightlist = [('0975', '0950'), ('0950', '0900'), ('0900', '0850'),
-    #              ('0975', '0900'), ('0975', '0850'), ('0950', '0800'), ('0950', '0700')]
+    train_test_alphas_lamdas(starting_weights)
+    train_test_n_hidden(starting_weights)
