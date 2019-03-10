@@ -19,7 +19,8 @@ def merge_results(folder, id):
     return results
 
 ## merge alpha-lambda results:
-results_al = defaultdict(list)
+pre_results = defaultdict(dict)
+results_g = []
 filelist = os.listdir('Results/run al')
 for i in filelist:
     if i.endswith(".json"):
@@ -27,9 +28,16 @@ for i in filelist:
             tmp = json.load(f)['4000']
             parts = i[:-5].split('-')
             a,l = float(parts[0]), float(parts[1])
-            results_al[l].append((a, tmp))
-for item in results_al:
-    results_al[item].sort()
+            pre_results[l][a] = tmp
+
+
+for i in pre_results:
+    tmp2 = []
+    for j in pre_results[i]:
+        tmp2.append((j,pre_results[i][j]))
+    tmp2.sort()
+    results_g.append((i, tmp2))
+results_g.sort()
 
 # Problem: not enough colors in standard mpl
 def getColor(c, N, idx):
@@ -66,7 +74,7 @@ def plot_alpha_lambdas(input, c):
         plt.plot(*zip(*value.items()), label=key, color=getColor(c, len(input), len(input)-index))
         index += 1
     plt.legend(title='$\lambda$ [-]')
-    plt.xlabel("Learning rate $\alpha$ (-)")
+    plt.xlabel("Learning rate (-)")
     plt.ylabel("Fraction of games won (-)")
     plt.show()
 
@@ -75,7 +83,8 @@ def plot_alpha_lambdas(input, c):
 if __name__ == "__main__""":
 
     colormap = 'viridis'
-    plot_trace_stats(merge_results('run 2', 't'), colormap)
-    plot_alpha_lambdas(results_al, colormap)
+    results_1 = merge_results('run 2', 't')
+    plot_trace_stats(results_1, colormap)
+    plot_alpha_lambdas(results_g, colormap)
 
 
