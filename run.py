@@ -219,7 +219,7 @@ def train_test_lambdas():
 def train_test_n_hidden(starting_weights):
 
     n_hidden_list = [10, 20, 30, 40, 50, 60, 70, 80]
-    paths = ['h20', 'h30', 'h35', 'h40', 'h45', 'h50', 'h60']
+    paths = ['h10', 'h20', 'h30', 'h40', 'h50', 'h60', 'h70', 'h80']
 
     learning_rate = 0.01
     num_episodes = 20000
