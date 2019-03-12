@@ -255,7 +255,8 @@ def train_test_alphas_lamdas(starting_weights):
         jobs = []
         for i in range(0 + 4*l, 4 + 4*l):
             process = mp.Process(target=train_model,
-                                 args=(argslist[i][0], argslist[i][1], num_games, 40, starting_weights, True, 1000, [num_games], True, paths[i]))
+                                 args=(argslist[i][0], argslist[i][1], num_games, 40, starting_weights,
+                                       True, 1000, test_eps, [num_games], True, paths[i]))
             jobs.append(process)
         for j in jobs:
             j.start()
