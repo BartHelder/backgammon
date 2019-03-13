@@ -8,9 +8,9 @@ import numpy as np
 import itertools
 
 num_eps = 10000
-test_eps = set(list(range(0, num_eps, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
+test_eps = set(list(range(1000, num_eps+1, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
 
-def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=num_eps, n_hidden=40, weights=None, do_tests=True,
+def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=num_eps, n_hidden=40, method='modified', weights=None, do_tests=True,
                 test_games=400, test_episodes=test_eps, save=False, name='file'):
     """
 
@@ -41,7 +41,8 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=num_eps, n_hid
 
     #stats = {'episode_lengths': np.zeros(num_episodes), 'episode_winners': np.zeros(num_episodes)}
     test_results = {}
-    players = [RLAgent(Game.TOKENS[0], weights=weights), RLAgent(Game.TOKENS[1], weights=weights)]
+    players = [RLAgent(Game.TOKENS[0], method=method, weights=weights),
+               RLAgent(Game.TOKENS[1], method=method, weights=weights)]
     if test_episodes is None:
         test_episodes = []
 
@@ -55,8 +56,11 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=num_eps, n_hid
             print("\rEpisode {}/{}".format(i_episode, num_episodes), end="")
             sys.stdout.flush()
 
+
         if do_tests and i_episode in test_episodes:
-            testplayers = [RLAgent(token=Game.TOKENS[0], weights=weights), RandomAgent(token=Game.TOKENS[1])]
+            # Test the current strength of the RLAgent's weights by playing a certain amount of games vs random opponent
+            testplayers = [RLAgent(token=Game.TOKENS[0],  method=method, weights=weights),
+                           RandomAgent(token=Game.TOKENS[1])]
             current_winrate = test(testplayers, num_games=test_games)
             test_results[i_episode] = current_winrate
             if save:
@@ -71,14 +75,14 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=num_eps, n_hid
 
         # Start a new game, get state and evaluation:
         g = Game.new_game()
-        x = g.extract_features(player=players[g.playernum].token, method='modified')
+        x = g.extract_features(player=players[g.playernum].token, method=method)
         V = players[0].evaluate_state(x)
 
         #  Play out game, observe state transitions and rewards, update weights and traces
         for t in itertools.count():
 
             reward, done = g.step(players)
-            x_new = g.extract_features(player=players[g.playernum].token, method='modified')
+            x_new = g.extract_features(player=players[g.playernum].token, method=method)
 
             # Forward pass
             a1 = sigmoid(np.dot(x_new, w1) + b1)  # activation of hidden layer neurons
@@ -189,15 +193,13 @@ def play_trained_agent(identifier):
     test(players, num_games=1, graphics=True, log=True)
 
 
-def train_test_lambdas():
+def train_test_lambdas(starting_weights):
 
     tdlist = [0.975, 0.95, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
     pathss = ['t0975', 't0950', 't0900', 't0850', 't0800', 't0700',
               't0600', 't0500', 't0400', 't0300', 't0200', 't0100']
-
     learning_rate = 0.01
-    num_episodes = 20000
-    test_episodes = set(list(range(0, num_episodes, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
+    num_episodes = 10000
 
     n_hidden = 40
 
@@ -206,8 +208,8 @@ def train_test_lambdas():
         jobs = []
         for i in range(0 + 4 * l, 4 + 4 * l):
             process = mp.Process(target=train_model,
-                                 args=(learning_rate, tdlist[i], num_episodes, n_hidden, None,
-                                       True, 400, test_episodes, True, pathss[i]))
+                                 args=(learning_rate, tdlist[i], num_episodes, n_hidden, 'modified', starting_weights,
+                                       True, 400, test_eps, True, pathss[i]))
             jobs.append(process)
         for j in jobs:
             j.start()
@@ -224,13 +226,13 @@ def train_test_n_hidden(starting_weights):
     learning_rate = 0.01
     num_episodes = 20000
     lamda = 0.8
-    test_episodes = set(list(range(0, num_episodes, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
+    test_episodes = set(list(range(1000, num_episodes+1, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
     # Use 4 cores at a time for three sets to make training manageable overnight
     for l in range(0, len(n_hidden_list)//4):
         jobs = []
         for i in range(0 + 4 * l, min(4 + 4 * l, 7)):
             process = mp.Process(target=train_model,
-                                 args=(learning_rate, lamda, num_episodes, n_hidden_list[i], starting_weights,
+                                 args=(learning_rate, lamda, num_episodes, n_hidden_list[i], 'modified', starting_weights,
                                        True, 400, test_episodes, True, paths[i]))
             jobs.append(process)
         for j in jobs:
@@ -255,7 +257,7 @@ def train_test_alphas_lamdas(starting_weights):
         jobs = []
         for i in range(0 + 4*l, 4 + 4*l):
             process = mp.Process(target=train_model,
-                                 args=(argslist[i][0], argslist[i][1], num_games, 40, starting_weights,
+                                 args=(argslist[i][0], argslist[i][1], num_games, 40, 'modified', starting_weights,
                                        True, 1000, test_eps, [num_games], True, paths[i]))
             jobs.append(process)
         for j in jobs:
@@ -265,17 +267,50 @@ def train_test_alphas_lamdas(starting_weights):
 
         print("Set %d/%d done " % (l + 1, num_sets))
 
+def train_compare_methods(starting_weights):
+
+    tdlist = [0.975, 0.95, 0.9, 0.85]
+    pathss = ['t0975', 't0950', 't0900', 't0850']
+    learning_rate = 0.01
+    num_episodes = 10000
+    test_eps = set(list(range(1000, num_episodes + 1, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
+
+    n_hidden = 40
+    # Use 4 cores at a time for three sets to make training manageable overnight
+    t1 = time.time()
+    jobs = []
+    for i in range(0, 4):
+        process = mp.Process(target=train_model,
+                             args=(learning_rate, tdlist[i], num_episodes, n_hidden, 'modified', starting_weights,
+                             True, 400, test_eps, True, pathss[i]))
+        jobs.append(process)
+    for j in jobs:
+        j.start()
+    for j in jobs:
+        j.join()
+
+    print("Set 1 done in %d s"%(time.time()-t1))
+
+    t2 = time.time()
+    paths = ['ot0975', 'ot0950', 'ot0900', 'ot0850']
+    jobs = []
+    for i in range(0, 4):
+        process = mp.Process(target=train_model,
+                             args=(learning_rate, tdlist[i], num_episodes, n_hidden, 'original', starting_weights,
+                             True, 400, test_eps, True, paths[i]))
+        jobs.append(process)
+    for j in jobs:
+        j.start()
+    for j in jobs:
+        j.join()
+
+    print("Set 2 done in %d s"%(time.time()-t2))
+
 
 if __name__ == "__main__":
 
-    run_multi = 1
     np.random.seed(0)
-
-    # Args list:
-    # learning_rate, trace_decay, num_episode, n_hidden, weights, do_tests, save, name
-
     data = np.load('starting_w.npz')
     starting_weights = [data['w1'], data['w2'], data['b1'], data['b2']]
 
-    train_test_alphas_lamdas(starting_weights)
-    train_test_n_hidden(starting_weights)
+    train_compare_methods(starting_weights)

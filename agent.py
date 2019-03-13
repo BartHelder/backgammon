@@ -33,7 +33,7 @@ class RandomAgent(Agent):
 
 class HumanAgent(Agent):
 
-    def get_action(self,moves,game=None):
+    def get_action(self, moves, game=None):
         loc = None
         movesLeft = copy.deepcopy(moves)
         pmove = []
@@ -121,14 +121,10 @@ class HumanAgent(Agent):
 
 class RLAgent(Agent):
 
-    def __init__(self, token, weights=None):
+    def __init__(self, token, method, weights=None):
         super().__init__(token)
         self.w1, self.w2, self.b1, self.b2 = weights
-
-
-    def load_weights(self, path='weights.npz'):
-        self.w1, self.w2, self.b1, self.b2 = np.load(path)
-
+        self.method = method
 
     def evaluate_state(self, x):
         """
@@ -142,7 +138,7 @@ class RLAgent(Agent):
         return V_hat
 
 
-    def get_action(self, moves, game):
+    def get_action(self, moves, game=None):
 
         """
         Return optimal action according to feed forward neural network with weights w1, w2, b1, b2
@@ -155,7 +151,7 @@ class RLAgent(Agent):
 
         for a in moves:
             ateList = game.take_action(a, self.token)
-            features = game.extract_features((game, game.opponent(self.token)), method='modified')
+            features = game.extract_features((game, game.opponent(self.token)), method=self.method)
             v = self.evaluate_state(features)
             if self.token == Game.TOKENS[1]:  # Invert board valuation if we're looking at black
                 v = 1. - v

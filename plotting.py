@@ -96,10 +96,48 @@ def plot_alphalambda(colormap):
     plt.ylabel("Fraction of games won [-]")
     plt.show()
 
+def plot_compares(colormap):
+    #  Add results to one dict
+    results_m = []
+    results_o = []
+    filelist = os.listdir('Results/run compare')
+    for i in filelist:
+        with open('Results/run compare/'+i, 'r') as f:
+            tmp = json.load(f)
+            tmp2 = []
+            for j in tmp:
+                tmp2.append((int(j), tmp[j]))
+            if i.startswith('results_t'):
+                results_m.append((float(i[10:-5])/1000, tmp2))
+            elif i.startswith('results_o'):
+                results_o.append((float(i[10:-5])/1000, tmp2))
+
+    results_m.sort()
+    results_o.sort()
+
+    fig4 = plt.figure(figsize=(8,6))
+
+    index = 1
+    for lamda, results in results_o:
+        plt.plot(*zip(*results), label='$\lambda$='+str(lamda), linestyle='--', color=getColor(colormap, 20, index))
+        index += 2
+    index = 0
+    for lamda, results in results_m:
+        plt.plot(*zip(*results), label=lamda, color=getColor(colormap, 20, index))
+        index += 2
+    plt.xticks()
+    plt.yticks()
+    plt.xlim((-500, 10500))
+    plt.legend(title='Feature extraction method \n Original           Modified', ncol=2)
+    plt.xlabel("Episode [-]")
+    plt.ylabel("Fraction of games won [-]")
+    plt.show()
+
 if __name__=="__main__":
 
     c = "coolwarm"
-    plot_lambdas(colormap=c)
-    plot_nhidden(colormap=c)
-    plot_alphalambda(colormap=c)
+    # plot_lambdas(colormap=c)
+    # plot_nhidden(colormap=c)
+    # plot_alphalambda(colormap=c)
+    plot_compares(colormap = 'tab20')
 
