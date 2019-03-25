@@ -10,14 +10,14 @@ import itertools
 num_eps = 10000
 test_eps = set(list(range(1000, num_eps+1, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
 
-def train_model(learning_rate: float=0.01,
-                trace_decay: float=0.9,
-                num_episodes: int=num_eps,
-                n_hidden: int=40,
+def train_model(learning_rate:float = 0.01,
+                trace_decay:float = 0.9,
+                num_episodes:int = num_eps,
+                n_hidden:int = 40,
                 method='modified',
                 weights=None,
-                test_episodes:list=test_eps,
-                test_games: int = 400,
+                test_episodes:list = test_eps,
+                test_games:int = 400,
                 save=False,
                 name='file') -> dict:
 
@@ -29,8 +29,8 @@ def train_model(learning_rate: float=0.01,
     :param n_hidden:  Amount of neurons in the hidden layer of the network
     :param method: Method to be used in extracting binary features from the current game state. Options: 'original', 'modified'.
     :param weights: Gives a set of already-used weights to start training from a given setpoint or with pre-defined starting weights
-    :param test_episodes: List of integers. At these episodes, training will be paused to test the strength of current weights by playing
-        a set number of games (test_games parameter) against a default opponent
+    :param test_episodes: List of integers. At these episodes, training will be paused to test the strength of current
+        weights by playing a set number of games (test_games parameter) against a default opponent
     :param test_games: How many games will each test consist of?
     :param save: Save weights to file at regular intervals? False by default
     :param name: identifier used to define the save paths of both the weights and the results. Each will automatically
@@ -61,7 +61,6 @@ def train_model(learning_rate: float=0.01,
     if test_episodes is None:
         test_episodes = []
 
-
     for i_episode in range(1, num_episodes+1):
 
         if (i_episode % 100) == 0:
@@ -70,7 +69,6 @@ def train_model(learning_rate: float=0.01,
                 np.savez('weights/w_'+name+'.npz', w1=w1, w2=w2, b1=b1, b2=b2)
             print("\rEpisode {}/{}".format(i_episode, num_episodes), end="")
             sys.stdout.flush()
-
 
         if i_episode in test_episodes:
             # Test the current strength of the RLAgent's weights by playing a certain amount of games vs random opponent
@@ -142,13 +140,13 @@ def test(players, num_games=100, graphics=False, log=False):
     Compare the performance of two players over a set number of games.
     :param players: list of two instances of Agent child-classes, will play against each other
     :param num_games: amount of games that will be played
-    :param draw: if True, display games on screen
+    :param graphics: if True, display games on screen
     :param log: display summary of test results
     :return: percentage of games that Player 0 (white) has won
     """
     winners = [0,0]
     if log:
-        print("Starting test run of %d games... "%num_games)
+        print("Starting test run of %d games... " % num_games)
     for i_game in range(num_games):
         g = Game.new_game(graphics=graphics)
         winner = g.play(players)
@@ -173,7 +171,7 @@ def RL_player_from_saved_weights(token, identifier):
     """
     data = np.load('weights/'+identifier+'.npz')
     weights = [data['w1'], data['w2'], data['b1'], data['b2']]
-    player = RLAgent(token=token, weights=weights)
+    player = RLAgent(token=token, method='modified', weights=weights)
 
     return player
 
@@ -182,7 +180,8 @@ def battle_trained_players(fightlist, filepath):
 
     """
     Tests a number of trained RL agents against each other by having them fight 1000 matches. Saves result to .json
-    :param fightlist: list of tuples,
+    :param fightlist: list of tuples, specifying which players (saved weights in .npz format) should battle
+    :param filepath: save location of results
     """
     results = {}
 
@@ -256,7 +255,6 @@ def train_test_n_hidden(starting_weights):
         print("Set %d/3 done " % (l + 1))
 
 def train_test_alphas_lamdas(starting_weights):
-
 
     num_games = 4000
     learning_rate_list = [0.015, 0.02, 0.03, 0.04]
