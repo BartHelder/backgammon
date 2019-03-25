@@ -8,12 +8,24 @@ from collections import defaultdict
 
 # Problem: not enough colors in standard mpl
 def getColor(c, N, idx):
+    """
+    Gets evenly spaced colors from one of many MPL colormaps, gives more control over colors used in busy plots
+    :param c: string id of a colormap
+    :param N: total number of colors you would like
+    :param idx: m
+    :return:
+    """
     cmap = mpl.cm.get_cmap(c)
     norm = mpl.colors.Normalize(vmin=0.0, vmax=N-1)
     return cmap(norm(idx))
 
 def plot_lambdas(colormap):
-    #  Add results to one dict
+
+    """
+    Plots results from the tests with different values of the trace decay parameter lambda
+    :param colormap: colormap id string
+    :return: plot
+    """
     results_l = []
     filelist = os.listdir('Results/run 2')
     for i in filelist:
@@ -33,13 +45,14 @@ def plot_lambdas(colormap):
         index += 1
     plt.xticks()
     plt.yticks()
-    plt.xlim((-500, 11800))
+    plt.xlim((-500, 11800))  # Can't get the legend in there nicely, so we squeeze the plot a bit
     plt.legend(title='$\lambda$ [-]')
     plt.xlabel("Episode [-]")
     plt.ylabel("Fraction of games won [-]")
     plt.show()
 
 def plot_nhidden(colormap):
+
     # results on n_hidden
     results_h = []
     filelist = os.listdir('Results/run hidden')
@@ -136,8 +149,8 @@ def plot_compares(colormap):
 if __name__=="__main__":
 
     c = "coolwarm"
-    # plot_lambdas(colormap=c)
-    # plot_nhidden(colormap=c)
-    # plot_alphalambda(colormap=c)
-    plot_compares(colormap = 'tab20')
+    plot_lambdas(colormap=c)
+    plot_nhidden(colormap=c)
+    plot_alphalambda(colormap=c)
+    plot_compares(colormap='tab20')
 

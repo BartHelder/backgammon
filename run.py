@@ -10,19 +10,33 @@ import itertools
 num_eps = 10000
 test_eps = set(list(range(1000, num_eps+1, 1000)) + [1, 100, 250, 500, 750, 1500, 2500, 3500, 4500])
 
-def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=num_eps, n_hidden=40, method='modified', weights=None, do_tests=True,
-                test_games=400, test_episodes=test_eps, save=False, name='file'):
-    """
+def train_model(learning_rate: float=0.01,
+                trace_decay: float=0.9,
+                num_episodes: int=num_eps,
+                n_hidden: int=40,
+                method='modified',
+                weights=None,
+                test_episodes:list=test_eps,
+                test_games: int = 400,
+                save=False,
+                name='file') -> dict:
 
-    :param learning_rate:
-    :param trace_decay:
-    :param num_episodes:
-    :param n_hidden:
-    :param weights:
-    :param test:
-    :param save:
-    :param name:
-    :return:
+    """
+    Train the neural network weights by means of TD(lambda).
+    :param learning_rate: Parameter to govern the size of update steps, float > 0 (alpha in literature)
+    :param trace_decay: Parameter to govern how much of the episode history is used to assign credit to TD updates
+    :param num_episodes: How many episodes will be trained for
+    :param n_hidden:  Amount of neurons in the hidden layer of the network
+    :param method: Method to be used in extracting binary features from the current game state. Options: 'original', 'modified'.
+    :param weights: Gives a set of already-used weights to start training from a given setpoint or with pre-defined starting weights
+    :param test_episodes: List of integers. At these episodes, training will be paused to test the strength of current weights by playing
+        a set number of games (test_games parameter) against a default opponent
+    :param test_games: How many games will each test consist of?
+    :param save: Save weights to file at regular intervals? False by default
+    :param name: identifier used to define the save paths of both the weights and the results. Each will automatically
+        be appended by the correct extension.
+
+    :return: dictionary of win percentages against the predefined opponent at eacb of the test intervals
     """
 
     if weights is not None:
@@ -36,6 +50,7 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=num_eps, n_hid
         b2 = np.zeros((1,1))                                                # Bias on output layer node
         weights = [w1, w2, b1, b2]
 
+    #  NN activation function:
     def sigmoid(z):
         return (1 / (1. + np.exp(-z)))
 
@@ -57,7 +72,7 @@ def train_model(learning_rate=0.01, trace_decay=0.9, num_episodes=num_eps, n_hid
             sys.stdout.flush()
 
 
-        if do_tests and i_episode in test_episodes:
+        if i_episode in test_episodes:
             # Test the current strength of the RLAgent's weights by playing a certain amount of games vs random opponent
             testplayers = [RLAgent(token=Game.TOKENS[0],  method=method, weights=weights),
                            RandomAgent(token=Game.TOKENS[1])]
@@ -156,7 +171,7 @@ def RL_player_from_saved_weights(token, identifier):
     :param identifier: identifies saved weight. agent weights will be saved as 'w_identifier.npz'
     :return: trained RLAgent player
     """
-    data = np.load('weights/w_'+identifier+'.npz')
+    data = np.load('weights/'+identifier+'.npz')
     weights = [data['w1'], data['w2'], data['b1'], data['b2']]
     player = RLAgent(token=token, weights=weights)
 
@@ -182,7 +197,6 @@ def battle_trained_players(fightlist, filepath):
     with open(filepath, 'w') as f:
         json.dump(results, f)
 
-
 def play_trained_agent(identifier):
     """
     Play a game (as human agent) vs a trained RL agent
@@ -191,7 +205,6 @@ def play_trained_agent(identifier):
     """
     players = [HumanAgent(Game.TOKENS[0]), RL_player_from_saved_weights('x', identifier)]
     test(players, num_games=1, graphics=True, log=True)
-
 
 def train_test_lambdas(starting_weights):
 
@@ -310,7 +323,8 @@ def train_compare_methods(starting_weights):
 if __name__ == "__main__":
 
     np.random.seed(0)
-    data = np.load('starting_w.npz')
-    starting_weights = [data['w1'], data['w2'], data['b1'], data['b2']]
+    #data = np.load('starting_w.npz')
+    #starting_weights = [data['w1'], data['w2'], data['b1'], data['b2']]
+    #train_compare_methods(starting_weights)
 
-    train_compare_methods(starting_weights)
+    play_trained_agent('run 2/w_t0975')
