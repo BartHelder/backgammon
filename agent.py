@@ -2,7 +2,6 @@ import random
 from game import Game
 import numpy as np
 
-
 try:
     import pygame
     from pygame.locals import *

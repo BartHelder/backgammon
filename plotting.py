@@ -105,7 +105,7 @@ def plot_alphalambda(colormap):
         index += 1
     plt.xscale('log')
     plt.legend(title='$\lambda$ [-]')
-    plt.xlabel("Learning rate [-]")
+    plt.xlabel("Learning rate (log scale)")
     plt.ylabel("Fraction of games won [-]")
     plt.show()
 
@@ -149,8 +149,8 @@ def plot_compares(colormap):
 if __name__=="__main__":
 
     c = "coolwarm"
-    plot_lambdas(colormap=c)
-    plot_nhidden(colormap=c)
+    # plot_lambdas(colormap=c)
+    # plot_nhidden(colormap=c)
     plot_alphalambda(colormap=c)
-    plot_compares(colormap='tab20')
+    # plot_compares(colormap='tab20')
 
