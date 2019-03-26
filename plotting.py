@@ -1,9 +1,7 @@
 import matplotlib as mpl
 from matplotlib import pyplot as plt
-from bokeh.plotting import figure, show, output_file
 import json
 import os
-import numpy as np
 from collections import defaultdict
 
 # Problem: not enough colors in standard mpl
